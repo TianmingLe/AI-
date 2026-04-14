@@ -14,12 +14,51 @@ public:
 class Mat {
 public:
     int rows, cols, type;
-    Mat() : rows(0), cols(0), type(0) {}
+    unsigned char* data_;
+    Mat() : rows(0), cols(0), type(0), data_(nullptr) {}
+    Mat(int _rows, int _cols, int _type)
+        : rows(_rows), cols(_cols), type(_type) {
+        if (_rows > 0 && _cols > 0) {
+            data_ = new unsigned char[_rows * _cols * 3]();
+        } else {
+            data_ = nullptr;
+        }
+    }
     Mat(int _rows, int _cols, int _type, const Scalar& s)
-        : rows(_rows), cols(_cols), type(_type) {}
+        : rows(_rows), cols(_cols), type(_type) {
+        if (_rows > 0 && _cols > 0) {
+            data_ = new unsigned char[_rows * _cols * 3]();
+        } else {
+            data_ = nullptr;
+        }
+    }
+    // Simplistic copy logic for stub
+    Mat(const Mat& other) : rows(other.rows), cols(other.cols), type(other.type) {
+        if (rows > 0 && cols > 0 && other.data_) {
+            data_ = new unsigned char[rows * cols * 3];
+            for (int i=0; i<rows*cols*3; ++i) data_[i] = other.data_[i];
+        } else {
+            data_ = nullptr;
+        }
+    }
+    Mat& operator=(const Mat& other) {
+        if (this != &other) {
+            delete[] data_;
+            rows = other.rows; cols = other.cols; type = other.type;
+            if (rows > 0 && cols > 0 && other.data_) {
+                data_ = new unsigned char[rows * cols * 3];
+                for (int i=0; i<rows*cols*3; ++i) data_[i] = other.data_[i];
+            } else {
+                data_ = nullptr;
+            }
+        }
+        return *this;
+    }
+    ~Mat() { delete[] data_; }
 
     bool empty() const { return rows == 0 || cols == 0; }
     Mat clone() const { return *this; }
+    unsigned char* ptr() { return data_; }
 };
 
 class Rect {
