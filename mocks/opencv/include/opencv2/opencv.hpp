@@ -15,11 +15,19 @@ class Mat {
 public:
     int rows, cols, type;
     Mat() : rows(0), cols(0), type(0) {}
-    Mat(int _rows, int _cols, int _type, const Scalar& s) 
+    Mat(int _rows, int _cols, int _type, const Scalar& s)
         : rows(_rows), cols(_cols), type(_type) {}
-    
+
     bool empty() const { return rows == 0 || cols == 0; }
     Mat clone() const { return *this; }
+};
+
+class Rect {
+public:
+    int x, y, width, height;
+    Rect() : x(0), y(0), width(0), height(0) {}
+    Rect(int _x, int _y, int _width, int _height) 
+        : x(_x), y(_y), width(_width), height(_height) {}
 };
 
 } // namespace cv
