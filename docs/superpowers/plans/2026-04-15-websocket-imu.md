@@ -1,24 +1,24 @@
-# WebSocket/HTTP Server & IMU Sensor Implementation Plan
+# WebSocket/HTTP 服务器与 IMU 传感器实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **对于代理工具（Agent）：** 需要子技能支持：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐个任务地执行此计划。步骤使用复选框（`- [ ]`）语法进行跟踪。
 
-**Goal:** Implement a dynamically loaded WebSocket/HTTP Server for telemetry broadcasting and an I2C-based IMU Sensor with graceful mock fallbacks.
+**目标**：实现一个可动态加载的 WebSocket/HTTP 服务器用于遥测数据广播，以及一个基于 I2C 的 IMU 传感器，两者都具备优雅的 Mock 降级功能。
 
-**Architecture:** Both components use RAII and thread-safe design. The `comm::WebServer` dynamically loads `libmicrohttpd.so` (or acts as a mock) and subscribes to the EventBus. The `perception::ImuSensor` uses standard `<linux/i2c-dev.h>` to read hardware and publishes to the EventBus from the `sensor_thread`.
+**架构**：两个组件均使用 RAII 和线程安全设计。`comm::WebServer` 动态加载 `libmicrohttpd.so`（或作为 Mock 运行）并订阅 EventBus。`perception::ImuSensor` 使用标准的 `<linux/i2c-dev.h>` 读取硬件数据，并在 `sensor_thread` 线程中向 EventBus 发布数据。
 
-**Tech Stack:** C++17, Linux I2C, Dynamic Loading (`dlopen`), Catch2.
+**技术栈**：C++17, Linux I2C, 动态加载（`dlopen`）, Catch2。
 
 ---
 
-### Task 1: Create ImuSensor Interface & Mock
+### 任务 1：创建 ImuSensor 接口与 Mock
 
-**Files:**
-- Create: `src/perception/ImuSensor.h`
-- Create: `src/perception/ImuSensor.cpp`
-- Modify: `CMakeLists.txt`
+**相关文件**：
+- 创建：`src/perception/ImuSensor.h`
+- 创建：`src/perception/ImuSensor.cpp`
+- 修改：`CMakeLists.txt`
 
-- [ ] **Step 1: Write the failing test**
-Create `tests/test_imu.cpp`:
+- [ ] **步骤 1：编写预期的失败测试**
+创建 `tests/test_imu.cpp`：
 ```cpp
 #include <catch2/catch_test_macros.hpp>
 #include "perception/ImuSensor.h"
@@ -32,12 +32,12 @@ TEST_CASE("ImuSensor Mock Fallback", "[imu]") {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
-Run: `cd build && make && ./tests/run_tests`
-Expected: FAIL with missing headers/symbols.
+- [ ] **步骤 2：运行测试以验证其失败**
+运行：`cd build && make && ./tests/run_tests`
+预期结果：因缺少头文件/符号而失败 (FAIL)。
 
-- [ ] **Step 3: Write minimal implementation**
-In `src/perception/ImuSensor.h`:
+- [ ] **步骤 3：编写最小实现代码**
+在 `src/perception/ImuSensor.h` 中：
 ```cpp
 #pragma once
 #include <string>
@@ -65,7 +65,7 @@ namespace perception {
     };
 }
 ```
-In `src/perception/ImuSensor.cpp`:
+在 `src/perception/ImuSensor.cpp` 中：
 ```cpp
 #include "perception/ImuSensor.h"
 #include "core/LogManager.h"
@@ -89,7 +89,7 @@ namespace perception {
     bool ImuSensor::initI2C(const std::string& device_path) {
         fd_ = open(device_path.c_str(), O_RDWR);
         if (fd_ < 0) return false;
-        // In real hardware, we would ioctl(fd_, I2C_SLAVE, IMU_ADDRESS) here
+        // 在真实硬件中，我们会在此时调用 ioctl(fd_, I2C_SLAVE, IMU_ADDRESS)
         return true;
     }
 
@@ -99,32 +99,32 @@ namespace perception {
             if (mock_angle_ > 3.14159f * 2) mock_angle_ -= 3.14159f * 2;
             return {std::sin(mock_angle_) * 30.0f, 0.0f, 0.0f, 0.0f, 0.0f, 9.8f};
         }
-        // Real I2C read logic would go here
+        // 真实的 I2C 读取逻辑将在此处实现
         return {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 9.8f};
     }
 }
 ```
-Update `CMakeLists.txt`: add `src/perception/ImuSensor.cpp` to `perception_lib`.
+更新 `CMakeLists.txt`：将 `src/perception/ImuSensor.cpp` 添加到 `perception_lib` 中。
 
-- [ ] **Step 4: Run test to verify it passes**
-Run: `cd build && make && ./tests/run_tests`
-Expected: PASS
+- [ ] **步骤 4：运行测试以验证其通过**
+运行：`cd build && make && ./tests/run_tests`
+预期结果：通过 (PASS)
 
-- [ ] **Step 5: Commit**
+- [ ] **步骤 5：提交代码**
 ```bash
 git add src/perception/ImuSensor.* tests/test_imu.cpp CMakeLists.txt
 git commit -m "feat: add ImuSensor with I2C integration and mock fallback"
 ```
 
-### Task 2: Create WebServer Protocol Interface & Mock
+### 任务 2：创建 WebServer 协议接口与 Mock
 
-**Files:**
-- Create: `src/comm/WebServer.h`
-- Create: `src/comm/WebServer.cpp`
-- Modify: `CMakeLists.txt`
+**相关文件**：
+- 创建：`src/comm/WebServer.h`
+- 创建：`src/comm/WebServer.cpp`
+- 修改：`CMakeLists.txt`
 
-- [ ] **Step 1: Write the failing test**
-Create `tests/test_webserver.cpp`:
+- [ ] **步骤 1：编写预期的失败测试**
+创建 `tests/test_webserver.cpp`：
 ```cpp
 #include <catch2/catch_test_macros.hpp>
 #include "comm/WebServer.h"
@@ -137,12 +137,12 @@ TEST_CASE("WebServer Mock Fallback", "[webserver]") {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
-Run: `cd build && make && ./tests/run_tests`
-Expected: FAIL with missing headers/symbols.
+- [ ] **步骤 2：运行测试以验证其失败**
+运行：`cd build && make && ./tests/run_tests`
+预期结果：因缺少头文件/符号而失败 (FAIL)。
 
-- [ ] **Step 3: Write minimal implementation**
-In `src/comm/WebServer.h`:
+- [ ] **步骤 3：编写最小实现代码**
+在 `src/comm/WebServer.h` 中：
 ```cpp
 #pragma once
 #include <string>
@@ -172,13 +172,13 @@ namespace comm {
         void* lib_handle_;
         void* daemon_;
         
-        // Function pointers
+        // 函数指针
         void* (*start_daemon_ptr_)(unsigned int, unsigned short, void*, void*, void*, void*, ...);
         void (*stop_daemon_ptr_)(void*);
     };
 }
 ```
-In `src/comm/WebServer.cpp`:
+在 `src/comm/WebServer.cpp` 中：
 ```cpp
 #include "comm/WebServer.h"
 #include "core/LogManager.h"
@@ -264,48 +264,48 @@ namespace comm {
             return;
         }
         LOG_DEBUG("[WS Broadcast]: " + message);
-        // Real implementation would maintain connection list and send payloads
+        // 真实的实现将在此维护连接列表并发送负载数据
     }
 }
 ```
-Update `CMakeLists.txt`: add `src/comm/WebServer.cpp` to `comm_lib`.
+更新 `CMakeLists.txt`：将 `src/comm/WebServer.cpp` 添加到 `comm_lib` 中。
 
-- [ ] **Step 4: Run test to verify it passes**
-Run: `cd build && make && ./tests/run_tests`
-Expected: PASS
+- [ ] **步骤 4：运行测试以验证其通过**
+运行：`cd build && make && ./tests/run_tests`
+预期结果：通过 (PASS)
 
-- [ ] **Step 5: Commit**
+- [ ] **步骤 5：提交代码**
 ```bash
 git add src/comm/WebServer.* tests/test_webserver.cpp CMakeLists.txt
 git commit -m "feat: add WebServer component with dynamic microhttpd loading"
 ```
 
-### Task 3: Integrate ImuSensor & WebServer into Main Pipeline
+### 任务 3：将 ImuSensor 与 WebServer 集成到主数据管道中
 
-**Files:**
-- Modify: `src/main.cpp`
+**相关文件**：
+- 修改：`src/main.cpp`
 
-- [ ] **Step 1: Write the integration code**
-In `src/main.cpp`:
-Include the headers:
+- [ ] **步骤 1：编写集成代码**
+在 `src/main.cpp` 中：
+引入头文件：
 ```cpp
 #include "perception/ImuSensor.h"
 #include "comm/WebServer.h"
 ```
 
-Modify `sensor_thread` to read IMU data:
+修改 `sensor_thread` 以读取 IMU 数据：
 ```cpp
 void sensor_thread(comm::BleClient& ble_client, perception::ImuSensor& imu, core::EventBus& event_bus) {
     LOG_INFO("Sensor thread started (BLE + IMU).");
     while (running) {
         try {
-            // BLE Reading
+            // BLE 读取
             std::string sensor_data = ble_client.readSensorData();
             if (!sensor_data.empty() && sensor_data != "{}") {
                 LOG_DEBUG("BLE Sensor Data: " + sensor_data);
             }
             
-            // IMU Reading
+            // IMU 读取
             auto imu_data = imu.readData();
             std::string imu_json = "{\"pitch\":" + std::to_string(imu_data.pitch) + 
                                   ",\"yaw\":" + std::to_string(imu_data.yaw) + 
@@ -319,23 +319,23 @@ void sensor_thread(comm::BleClient& ble_client, perception::ImuSensor& imu, core
         }
         
         std::unique_lock<std::mutex> lock(shutdown_mutex);
-        shutdown_cv.wait_for(lock, std::chrono::milliseconds(100), []{ return !running.load(); }); // Increased to 100Hz
+        shutdown_cv.wait_for(lock, std::chrono::milliseconds(100), []{ return !running.load(); }); // 提升至 100Hz
     }
 }
 ```
 
-Modify `main()` to initialize and wire them up:
+修改 `main()` 进行初始化和连线配置：
 ```cpp
-    // Init ImuSensor
+    // 初始化 ImuSensor
     std::string imu_dev = config.getString("imu_device", "/dev/i2c-1");
     perception::ImuSensor imu(imu_dev);
     
-    // Init WebServer
+    // 初始化 WebServer
     comm::WebServer web_server;
     int ws_port = config.getInt("webserver_port").value_or(8080);
     web_server.start(ws_port);
     
-    // Wire up WebServer to EventBus
+    // 将 WebServer 挂载到 EventBus
     event_bus.subscribe("perception/detections", [&](const std::string& payload) {
         web_server.broadcast(payload);
     });
@@ -343,21 +343,21 @@ Modify `main()` to initialize and wire them up:
         web_server.broadcast(payload);
     });
 ```
-Update the `std::thread t_sensor` call:
+更新 `std::thread t_sensor` 的调用：
 ```cpp
     std::thread t_sensor(sensor_thread, std::ref(ble_client), std::ref(imu), std::ref(event_bus));
 ```
-Update shutdown sequence:
+更新关闭序列：
 ```cpp
     web_server.stop();
     LOG_INFO("AI Glasses Firmware terminated successfully.");
 ```
 
-- [ ] **Step 2: Compile and test integration**
-Run: `cd build && make && ./ai_glasses_firmware & PID=$! && sleep 3 && kill -SIGINT $PID`
-Expected: Successfully compiles. Logs show IMU and WebServer starting in Mock mode, `sensor/imu` publishing, and `[WS Mock Broadcast]` logging the IMU JSON, followed by graceful shutdown.
+- [ ] **步骤 2：编译并测试集成**
+运行：`cd build && make && ./ai_glasses_firmware & PID=$! && sleep 3 && kill -SIGINT $PID`
+预期结果：编译成功。日志显示 IMU 和 WebServer 在 Mock 模式下启动，`sensor/imu` 成功发布，且 `[WS Mock Broadcast]` 打印出了 IMU 的 JSON 数据，随后完成优雅退出。
 
-- [ ] **Step 3: Commit**
+- [ ] **步骤 3：提交代码**
 ```bash
 git add src/main.cpp
 git commit -m "feat: integrate ImuSensor and WebServer into main event loop"
