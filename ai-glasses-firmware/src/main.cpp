@@ -104,8 +104,8 @@ static void sensor_thread(
             std::string payload = "{\"lux\":" + std::to_string(lux) + "}";
             bus.publish("sensor/als", payload);
             auto resp = http.post(als_http_endpoint, payload);
-            if (!resp.has_value() && !http.isUsingMock()) {
-                LOG_WARN("ALS POST failed: " + http.getLastError());
+            if (!resp.ok() && !http.isUsingMock()) {
+                LOG_WARN("ALS POST failed: " + resp.error);
             }
         }
 

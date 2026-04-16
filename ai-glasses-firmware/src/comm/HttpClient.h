@@ -6,6 +6,14 @@
 
 namespace comm {
 
+struct HttpResult {
+    std::optional<std::string> body;
+    std::string error;
+    int code{0};
+
+    bool ok() const { return body.has_value(); }
+};
+
 class HttpClient {
 public:
     HttpClient();
@@ -14,21 +22,18 @@ public:
     HttpClient(const HttpClient&) = delete;
     HttpClient& operator=(const HttpClient&) = delete;
 
-    std::optional<std::string> get(const std::string& url);
-    std::optional<std::string> post(const std::string& url, const std::string& json_payload);
+    HttpResult get(const std::string& url);
+    HttpResult post(const std::string& url, const std::string& json_payload);
 
     bool isUsingMock() const;
-    std::string getLastError() const;
 
 private:
     bool loadCurlLibrary();
     void unloadCurlLibrary();
-    void setError(const std::string& err);
 
     mutable std::mutex mutex_;
     bool use_mock_;
     bool library_loaded_;
-    std::string last_error_;
     void* lib_handle_;
 
     void* (*curl_easy_init_ptr_)();

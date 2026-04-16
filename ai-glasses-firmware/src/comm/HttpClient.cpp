@@ -24,7 +24,6 @@ static size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* use
 HttpClient::HttpClient()
     : use_mock_(true),
       library_loaded_(false),
-      last_error_(""),
       lib_handle_(nullptr),
       curl_easy_init_ptr_(nullptr),
       curl_easy_cleanup_ptr_(nullptr),
@@ -45,16 +44,6 @@ HttpClient::~HttpClient() {
 bool HttpClient::isUsingMock() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return use_mock_;
-}
-
-std::string HttpClient::getLastError() const {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return last_error_;
-}
-
-void HttpClient::setError(const std::string& err) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    last_error_ = err;
 }
 
 bool HttpClient::loadCurlLibrary() {
@@ -96,7 +85,7 @@ void HttpClient::unloadCurlLibrary() {
     curl_easy_perform_ptr_ = nullptr;
 }
 
-std::optional<std::string> HttpClient::get(const std::string& url) {
+HttpResult HttpClient::get(const std::string& url) {
     bool use_mock;
     auto curl_easy_init_ptr = curl_easy_init_ptr_;
     auto curl_easy_cleanup_ptr = curl_easy_cleanup_ptr_;
@@ -105,26 +94,31 @@ std::optional<std::string> HttpClient::get(const std::string& url) {
 
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        last_error_.clear();
         use_mock = use_mock_;
     }
 
     if (use_mock) {
         std::this_thread::sleep_for(std::chrono::milliseconds(30));
-        return std::string("{\"status\":\"ok\",\"mock\":true,\"method\":\"get\"}");
+        HttpResult ok;
+        ok.body = std::string("{\"status\":\"ok\",\"mock\":true,\"method\":\"get\"}");
+        return ok;
     }
 
     if (!curl_easy_init_ptr || !curl_easy_cleanup_ptr || !curl_easy_setopt_ptr || !curl_easy_perform_ptr) {
-        setError("curl symbols not loaded");
-        LOG_ERROR("HttpClient: curl symbols not loaded");
-        return std::nullopt;
+        HttpResult r;
+        r.error = "curl symbols not loaded";
+        r.code = -1;
+        LOG_ERROR("HttpClient: " + r.error);
+        return r;
     }
 
     void* curl = curl_easy_init_ptr();
     if (!curl) {
-        setError("curl_easy_init returned null");
-        LOG_ERROR("HttpClient: curl_easy_init returned null");
-        return std::nullopt;
+        HttpResult r;
+        r.error = "curl_easy_init returned null";
+        r.code = -2;
+        LOG_ERROR("HttpClient: " + r.error);
+        return r;
     }
 
     std::string readBuffer;
@@ -133,23 +127,28 @@ std::optional<std::string> HttpClient::get(const std::string& url) {
         curl_easy_setopt_ptr(curl, CURLOPT_WRITEDATA, &readBuffer) != 0 ||
         curl_easy_setopt_ptr(curl, CURLOPT_TIMEOUT, 5L) != 0) {
         curl_easy_cleanup_ptr(curl);
-        setError("curl_easy_setopt failed for GET " + url);
-        LOG_ERROR("HttpClient: curl_easy_setopt failed for GET " + url);
-        return std::nullopt;
+        HttpResult r;
+        r.error = "curl_easy_setopt failed for GET " + url;
+        r.code = -3;
+        LOG_ERROR("HttpClient: " + r.error);
+        return r;
     }
 
     int res = curl_easy_perform_ptr(curl);
     curl_easy_cleanup_ptr(curl);
     if (res != 0) {
-        std::string err = "curl_easy_perform failed for GET " + url + " code " + std::to_string(res);
-        setError(err);
-        LOG_ERROR("HttpClient: " + err);
-        return std::nullopt;
+        HttpResult r;
+        r.code = res;
+        r.error = "curl_easy_perform failed for GET " + url + " code " + std::to_string(res);
+        LOG_ERROR("HttpClient: " + r.error);
+        return r;
     }
-    return readBuffer;
+    HttpResult ok;
+    ok.body = std::move(readBuffer);
+    return ok;
 }
 
-std::optional<std::string> HttpClient::post(const std::string& url, const std::string& json_payload) {
+HttpResult HttpClient::post(const std::string& url, const std::string& json_payload) {
     bool use_mock;
     auto curl_easy_init_ptr = curl_easy_init_ptr_;
     auto curl_easy_cleanup_ptr = curl_easy_cleanup_ptr_;
@@ -158,27 +157,32 @@ std::optional<std::string> HttpClient::post(const std::string& url, const std::s
 
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        last_error_.clear();
         use_mock = use_mock_;
     }
 
     if (use_mock) {
         std::this_thread::sleep_for(std::chrono::milliseconds(60));
         (void)json_payload;
-        return std::string("{\"status\":\"ok\",\"mock\":true,\"method\":\"post\"}");
+        HttpResult ok;
+        ok.body = std::string("{\"status\":\"ok\",\"mock\":true,\"method\":\"post\"}");
+        return ok;
     }
 
     if (!curl_easy_init_ptr || !curl_easy_cleanup_ptr || !curl_easy_setopt_ptr || !curl_easy_perform_ptr) {
-        setError("curl symbols not loaded");
-        LOG_ERROR("HttpClient: curl symbols not loaded");
-        return std::nullopt;
+        HttpResult r;
+        r.error = "curl symbols not loaded";
+        r.code = -1;
+        LOG_ERROR("HttpClient: " + r.error);
+        return r;
     }
 
     void* curl = curl_easy_init_ptr();
     if (!curl) {
-        setError("curl_easy_init returned null");
-        LOG_ERROR("HttpClient: curl_easy_init returned null");
-        return std::nullopt;
+        HttpResult r;
+        r.error = "curl_easy_init returned null";
+        r.code = -2;
+        LOG_ERROR("HttpClient: " + r.error);
+        return r;
     }
 
     std::string readBuffer;
@@ -188,20 +192,25 @@ std::optional<std::string> HttpClient::post(const std::string& url, const std::s
         curl_easy_setopt_ptr(curl, CURLOPT_WRITEDATA, &readBuffer) != 0 ||
         curl_easy_setopt_ptr(curl, CURLOPT_TIMEOUT, 5L) != 0) {
         curl_easy_cleanup_ptr(curl);
-        setError("curl_easy_setopt failed for POST " + url);
-        LOG_ERROR("HttpClient: curl_easy_setopt failed for POST " + url);
-        return std::nullopt;
+        HttpResult r;
+        r.error = "curl_easy_setopt failed for POST " + url;
+        r.code = -3;
+        LOG_ERROR("HttpClient: " + r.error);
+        return r;
     }
 
     int res = curl_easy_perform_ptr(curl);
     curl_easy_cleanup_ptr(curl);
     if (res != 0) {
-        std::string err = "curl_easy_perform failed for POST " + url + " code " + std::to_string(res);
-        setError(err);
-        LOG_ERROR("HttpClient: " + err);
-        return std::nullopt;
+        HttpResult r;
+        r.code = res;
+        r.error = "curl_easy_perform failed for POST " + url + " code " + std::to_string(res);
+        LOG_ERROR("HttpClient: " + r.error);
+        return r;
     }
-    return readBuffer;
+    HttpResult ok;
+    ok.body = std::move(readBuffer);
+    return ok;
 }
 
 } // namespace comm
