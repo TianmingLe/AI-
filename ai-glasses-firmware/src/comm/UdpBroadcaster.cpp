@@ -47,7 +47,7 @@ bool UdpBroadcaster::start() {
 
     std::memset(&broadcast_addr_, 0, sizeof(broadcast_addr_));
     broadcast_addr_.sin_family = AF_INET;
-    broadcast_addr_.sin_port = htons(port_);
+    broadcast_addr_.sin_port = htons(static_cast<uint16_t>(port_));
     broadcast_addr_.sin_addr.s_addr = htonl(INADDR_BROADCAST);
 
     use_mock_ = false;

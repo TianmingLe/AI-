@@ -14,6 +14,9 @@ constexpr int CURLOPT_WRITEFUNCTION = 20011;
 constexpr int CURLOPT_WRITEDATA = 10001;
 constexpr int CURLOPT_POSTFIELDS = 10015;
 constexpr int CURLOPT_TIMEOUT = 13;
+constexpr int CURLOPT_SSL_VERIFYPEER = 64;
+constexpr int CURLOPT_SSL_VERIFYHOST = 81;
+constexpr int CURLOPT_CAINFO = 10065;
 
 static size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
     auto* buf = static_cast<std::string*>(userp);
@@ -21,10 +24,16 @@ static size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* use
     return size * nmemb;
 }
 
-HttpClient::HttpClient()
+static inline bool starts_with(const std::string& s, const char* prefix) {
+    size_t n = std::char_traits<char>::length(prefix);
+    return s.size() >= n && s.compare(0, n, prefix) == 0;
+}
+
+HttpClient::HttpClient(HttpClientOptions options)
     : use_mock_(true),
       library_loaded_(false),
       lib_handle_(nullptr),
+      options_(std::move(options)),
       curl_easy_init_ptr_(nullptr),
       curl_easy_cleanup_ptr_(nullptr),
       curl_easy_setopt_ptr_(nullptr),
@@ -86,6 +95,13 @@ void HttpClient::unloadCurlLibrary() {
 }
 
 HttpResult HttpClient::get(const std::string& url) {
+    if (options_.require_https && starts_with(url, "http://")) {
+        HttpResult r;
+        r.code = -10;
+        r.error = "insecure scheme blocked for GET " + url;
+        return r;
+    }
+
     bool use_mock;
     auto curl_easy_init_ptr = curl_easy_init_ptr_;
     auto curl_easy_cleanup_ptr = curl_easy_cleanup_ptr_;
@@ -134,6 +150,16 @@ HttpResult HttpClient::get(const std::string& url) {
         return r;
     }
 
+    if (starts_with(url, "https://")) {
+        long verify_peer = options_.verify_peer ? 1L : 0L;
+        long verify_host = options_.verify_host ? 2L : 0L;
+        (void)curl_easy_setopt_ptr(curl, CURLOPT_SSL_VERIFYPEER, verify_peer);
+        (void)curl_easy_setopt_ptr(curl, CURLOPT_SSL_VERIFYHOST, verify_host);
+        if (!options_.ca_bundle_path.empty()) {
+            (void)curl_easy_setopt_ptr(curl, CURLOPT_CAINFO, options_.ca_bundle_path.c_str());
+        }
+    }
+
     int res = curl_easy_perform_ptr(curl);
     curl_easy_cleanup_ptr(curl);
     if (res != 0) {
@@ -149,6 +175,13 @@ HttpResult HttpClient::get(const std::string& url) {
 }
 
 HttpResult HttpClient::post(const std::string& url, const std::string& json_payload) {
+    if (options_.require_https && starts_with(url, "http://")) {
+        HttpResult r;
+        r.code = -10;
+        r.error = "insecure scheme blocked for POST " + url;
+        return r;
+    }
+
     bool use_mock;
     auto curl_easy_init_ptr = curl_easy_init_ptr_;
     auto curl_easy_cleanup_ptr = curl_easy_cleanup_ptr_;
@@ -197,6 +230,16 @@ HttpResult HttpClient::post(const std::string& url, const std::string& json_payl
         r.code = -3;
         LOG_ERROR("HttpClient: " + r.error);
         return r;
+    }
+
+    if (starts_with(url, "https://")) {
+        long verify_peer = options_.verify_peer ? 1L : 0L;
+        long verify_host = options_.verify_host ? 2L : 0L;
+        (void)curl_easy_setopt_ptr(curl, CURLOPT_SSL_VERIFYPEER, verify_peer);
+        (void)curl_easy_setopt_ptr(curl, CURLOPT_SSL_VERIFYHOST, verify_host);
+        if (!options_.ca_bundle_path.empty()) {
+            (void)curl_easy_setopt_ptr(curl, CURLOPT_CAINFO, options_.ca_bundle_path.c_str());
+        }
     }
 
     int res = curl_easy_perform_ptr(curl);

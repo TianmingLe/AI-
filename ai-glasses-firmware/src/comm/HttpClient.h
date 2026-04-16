@@ -14,9 +14,16 @@ struct HttpResult {
     bool ok() const { return body.has_value(); }
 };
 
+struct HttpClientOptions {
+    bool require_https{false};
+    bool verify_peer{true};
+    bool verify_host{true};
+    std::string ca_bundle_path;
+};
+
 class HttpClient {
 public:
-    HttpClient();
+    explicit HttpClient(HttpClientOptions options = {});
     ~HttpClient();
 
     HttpClient(const HttpClient&) = delete;
@@ -35,6 +42,7 @@ private:
     bool use_mock_;
     bool library_loaded_;
     void* lib_handle_;
+    HttpClientOptions options_;
 
     void* (*curl_easy_init_ptr_)();
     void (*curl_easy_cleanup_ptr_)(void*);

@@ -228,6 +228,14 @@ int main() {
 
     core::EventBus bus(eventbus_max_queue_size, eventbus_worker_count, eventbus_max_per_topic);
 
+    auto clampPort = [&](const std::string& key, int value, int def) -> int {
+        if (value < 1 || value > 65535) {
+            LOG_WARN("Invalid " + key + "=" + std::to_string(value) + " fallback=" + std::to_string(def));
+            return def;
+        }
+        return value;
+    };
+
     std::string mqtt_broker = config.getString("mqtt_broker", "tcp://localhost:1883");
     std::string mqtt_client_id = config.getString("mqtt_client_id", "ai_glasses_001");
     comm::MqttClient mqtt(mqtt_broker, mqtt_client_id);
@@ -236,7 +244,8 @@ int main() {
     comm::CoapClient coap(config.getString("coap_endpoint", "coap://localhost"));
     coap.connect();
 
-    comm::WebServer web(config.getInt("web_port").value_or(8080));
+    int web_port = clampPort("web_port", config.getInt("web_port").value_or(8080), 8080);
+    comm::WebServer web(web_port);
     web.start();
 
     comm::OpcUaClient opcua(config.getString("opcua_endpoint", "opc.tcp://localhost:4840"));
@@ -254,9 +263,15 @@ int main() {
     perception::GpsSensor gps(config.getString("gps_device", "mock"));
     perception::AudioInput audio(config.getString("audio_device", "mock"));
     perception::SensorFusion fusion(config);
-    comm::HttpClient http;
+    comm::HttpClientOptions http_opts;
+    http_opts.require_https = config.getString("http_require_https", "false") == "true";
+    http_opts.verify_peer = config.getString("http_verify_peer", "true") == "true";
+    http_opts.verify_host = config.getString("http_verify_host", "true") == "true";
+    http_opts.ca_bundle_path = config.getString("http_ca_bundle", "");
+    comm::HttpClient http(http_opts);
 
-    comm::UdpBroadcaster udp(config.getInt("udp_discovery_port").value_or(9999));
+    int udp_port = clampPort("udp_discovery_port", config.getInt("udp_discovery_port").value_or(9999), 9999);
+    comm::UdpBroadcaster udp(udp_port);
     udp.start();
 
     render::ArRenderer renderer;
