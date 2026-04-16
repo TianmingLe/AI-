@@ -8,6 +8,7 @@
 #include "comm/UdpBroadcaster.h"
 #include "comm/WebServer.h"
 #include "core/ConfigManager.h"
+#include "core/ConfigSpec.h"
 #include "core/EventBus.h"
 #include "core/LogManager.h"
 #include "perception/AlsSensor.h"
@@ -192,49 +193,33 @@ int main() {
         core::LogManager::setLevel(core::LogLevel::Warn);
     } else if (log_level == "error") {
         core::LogManager::setLevel(core::LogLevel::Error);
-    } else {
-        LOG_WARN("Invalid log_level=" + log_level);
     }
 
-    auto clampSize = [&](const std::string& key, size_t value, size_t def, size_t min_v, size_t max_v) -> size_t {
-        if (value < min_v || value > max_v) {
-            LOG_WARN("Invalid " + key + "=" + std::to_string(value) + " fallback=" + std::to_string(def));
-            return def;
+    auto issues = core::ConfigSpec::validate(config);
+    size_t error_count = 0;
+    for (const auto& i : issues) {
+        if (i.level == core::ConfigIssue::Level::Error) {
+            error_count++;
+            LOG_ERROR("Config error key=" + i.key + " msg=" + i.message);
+        } else {
+            LOG_WARN("Config warn key=" + i.key + " msg=" + i.message);
         }
-        return value;
+    }
+    if (error_count > 0) {
+        LOG_ERROR("Config validation failed errors=" + std::to_string(error_count));
+        return 1;
+    }
+
+    auto parseBool = [&](const std::string& key, const std::string& def) -> bool {
+        std::string v = config.getString(key, def);
+        std::transform(v.begin(), v.end(), v.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return v == "true";
     };
 
-    size_t eventbus_max_queue_size = clampSize(
-        "eventbus_max_queue_size",
-        config.getSizeT("eventbus_max_queue_size").value_or(1024),
-        1024,
-        1,
-        1000000
-    );
-    size_t eventbus_worker_count = clampSize(
-        "eventbus_worker_count",
-        config.getSizeT("eventbus_worker_count").value_or(1),
-        1,
-        1,
-        64
-    );
-    size_t eventbus_max_per_topic = clampSize(
-        "eventbus_max_per_topic",
-        config.getSizeT("eventbus_max_per_topic").value_or(256),
-        256,
-        1,
-        eventbus_max_queue_size
-    );
-
+    size_t eventbus_max_queue_size = config.getSizeT("eventbus_max_queue_size").value_or(1024);
+    size_t eventbus_worker_count = config.getSizeT("eventbus_worker_count").value_or(1);
+    size_t eventbus_max_per_topic = config.getSizeT("eventbus_max_per_topic").value_or(256);
     core::EventBus bus(eventbus_max_queue_size, eventbus_worker_count, eventbus_max_per_topic);
-
-    auto clampPort = [&](const std::string& key, int value, int def) -> int {
-        if (value < 1 || value > 65535) {
-            LOG_WARN("Invalid " + key + "=" + std::to_string(value) + " fallback=" + std::to_string(def));
-            return def;
-        }
-        return value;
-    };
 
     std::string mqtt_broker = config.getString("mqtt_broker", "tcp://localhost:1883");
     std::string mqtt_client_id = config.getString("mqtt_client_id", "ai_glasses_001");
@@ -244,7 +229,7 @@ int main() {
     comm::CoapClient coap(config.getString("coap_endpoint", "coap://localhost"));
     coap.connect();
 
-    int web_port = clampPort("web_port", config.getInt("web_port").value_or(8080), 8080);
+    int web_port = config.getInt("web_port").value_or(8080);
     comm::WebServer web(web_port);
     web.start();
 
@@ -264,13 +249,13 @@ int main() {
     perception::AudioInput audio(config.getString("audio_device", "mock"));
     perception::SensorFusion fusion(config);
     comm::HttpClientOptions http_opts;
-    http_opts.require_https = config.getString("http_require_https", "false") == "true";
-    http_opts.verify_peer = config.getString("http_verify_peer", "true") == "true";
-    http_opts.verify_host = config.getString("http_verify_host", "true") == "true";
+    http_opts.require_https = parseBool("http_require_https", "false");
+    http_opts.verify_peer = parseBool("http_verify_peer", "true");
+    http_opts.verify_host = parseBool("http_verify_host", "true");
     http_opts.ca_bundle_path = config.getString("http_ca_bundle", "");
     comm::HttpClient http(http_opts);
 
-    int udp_port = clampPort("udp_discovery_port", config.getInt("udp_discovery_port").value_or(9999), 9999);
+    int udp_port = config.getInt("udp_discovery_port").value_or(9999);
     comm::UdpBroadcaster udp(udp_port);
     udp.start();
 

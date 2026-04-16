@@ -4,6 +4,7 @@ target_include_directories(catch2_mock PUBLIC /workspace/mocks/catch2)
 add_executable(run_tests
     test_sanity.cpp
     test_config.cpp
+    test_config_spec.cpp
     test_http.cpp
     test_http_concurrency.cpp
     test_udp.cpp

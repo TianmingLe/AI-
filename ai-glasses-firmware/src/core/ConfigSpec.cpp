@@ -26,7 +26,7 @@ static void validateEnumLogLevel(const ConfigManager& cfg, std::vector<ConfigIss
     addIssue(out, ConfigIssue::Level::Warn, "log_level", "invalid value: " + v + " (fallback=info)");
 }
 
-static void validateSizeRange(const ConfigManager& cfg, std::vector<ConfigIssue>& out, const std::string& key, size_t def, size_t minv, size_t maxv) {
+static void validateSizeRange(const ConfigManager& cfg, std::vector<ConfigIssue>& out, const std::string& key, size_t minv, size_t maxv) {
     auto v = cfg.getSizeT(key);
     if (!v.has_value()) return;
     if (*v < minv || *v > maxv) {
@@ -87,9 +87,9 @@ static void validateHttpTlsPolicy(const ConfigManager& cfg, std::vector<ConfigIs
 
 static void validateEventBusPolicy(const ConfigManager& cfg, std::vector<ConfigIssue>& out) {
     size_t max_q = cfg.getSizeT("eventbus_max_queue_size").value_or(1024);
-    validateSizeRange(cfg, out, "eventbus_max_queue_size", 1024, 1, 1000000);
-    validateSizeRange(cfg, out, "eventbus_worker_count", 1, 1, 64);
-    validateSizeRange(cfg, out, "eventbus_max_per_topic", 256, 1, max_q);
+    validateSizeRange(cfg, out, "eventbus_max_queue_size", 1, 1000000);
+    validateSizeRange(cfg, out, "eventbus_worker_count", 1, 64);
+    validateSizeRange(cfg, out, "eventbus_max_per_topic", 1, max_q);
 
     auto max_per_topic = cfg.getSizeT("eventbus_max_per_topic");
     if (max_per_topic.has_value() && *max_per_topic > max_q) {
@@ -120,4 +120,3 @@ std::vector<ConfigIssue> ConfigSpec::validate(const ConfigManager& cfg) {
 }
 
 } // namespace core
-

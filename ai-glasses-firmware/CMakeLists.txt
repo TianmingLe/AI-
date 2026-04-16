@@ -65,6 +65,7 @@ endfunction()
 
 add_library(core_lib
     src/core/ConfigManager.cpp
+    src/core/ConfigSpec.cpp
     src/core/EventBus.cpp
     src/core/LogManager.cpp
 )
