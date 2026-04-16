@@ -195,7 +195,38 @@ int main() {
     } else {
         LOG_WARN("Invalid log_level=" + log_level);
     }
-    core::EventBus bus;
+
+    auto clampSize = [&](const std::string& key, size_t value, size_t def, size_t min_v, size_t max_v) -> size_t {
+        if (value < min_v || value > max_v) {
+            LOG_WARN("Invalid " + key + "=" + std::to_string(value) + " fallback=" + std::to_string(def));
+            return def;
+        }
+        return value;
+    };
+
+    size_t eventbus_max_queue_size = clampSize(
+        "eventbus_max_queue_size",
+        config.getSizeT("eventbus_max_queue_size").value_or(1024),
+        1024,
+        1,
+        1000000
+    );
+    size_t eventbus_worker_count = clampSize(
+        "eventbus_worker_count",
+        config.getSizeT("eventbus_worker_count").value_or(1),
+        1,
+        1,
+        64
+    );
+    size_t eventbus_max_per_topic = clampSize(
+        "eventbus_max_per_topic",
+        config.getSizeT("eventbus_max_per_topic").value_or(256),
+        256,
+        1,
+        eventbus_max_queue_size
+    );
+
+    core::EventBus bus(eventbus_max_queue_size, eventbus_worker_count, eventbus_max_per_topic);
 
     std::string mqtt_broker = config.getString("mqtt_broker", "tcp://localhost:1883");
     std::string mqtt_client_id = config.getString("mqtt_client_id", "ai_glasses_001");

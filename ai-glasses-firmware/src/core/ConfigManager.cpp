@@ -5,6 +5,7 @@
 #include <cerrno>
 #include <cstring>
 #include <fstream>
+#include <limits>
 #include <sstream>
 
 namespace core {
@@ -82,6 +83,19 @@ std::optional<double> ConfigManager::getFloat(const std::string& key) const {
     if (it == kv_.end()) return std::nullopt;
     try {
         return std::stod(it->second);
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
+std::optional<size_t> ConfigManager::getSizeT(const std::string& key) const {
+    auto it = kv_.find(key);
+    if (it == kv_.end()) return std::nullopt;
+    try {
+        if (!it->second.empty() && it->second[0] == '-') return std::nullopt;
+        unsigned long long v = std::stoull(it->second);
+        if (v > std::numeric_limits<size_t>::max()) return std::nullopt;
+        return static_cast<size_t>(v);
     } catch (...) {
         return std::nullopt;
     }

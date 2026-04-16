@@ -18,6 +18,8 @@ TEST_CASE("ConfigManager load and parse", "[config]") {
         out << "a=1\n";
         out << "b=hello\n";
         out << "bad_int=xx\n";
+        out << "sz=10\n";
+        out << "sz_bad=-1\n";
         out << "pi=3.14\n";
     }
 
@@ -28,6 +30,9 @@ TEST_CASE("ConfigManager load and parse", "[config]") {
     REQUIRE(cfg.getInt("a").value() == 1);
     REQUIRE(!cfg.getInt("bad_int").has_value());
     REQUIRE(cfg.getFloat("pi").has_value());
+    REQUIRE(cfg.getSizeT("sz").has_value());
+    REQUIRE(cfg.getSizeT("sz").value() == 10);
+    REQUIRE(!cfg.getSizeT("sz_bad").has_value());
 
     std::remove(path);
 }
