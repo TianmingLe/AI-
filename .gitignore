@@ -1,0 +1,6 @@
+ai-glasses-firmware/build/
+**/build/
+*.o
+*.a
+*.so
+*.log
