@@ -20,18 +20,28 @@
 
 #include <atomic>
 #include <chrono>
-#include <csignal>
 #include <condition_variable>
+#include <csignal>
+#include <cstring>
+#include <errno.h>
+#include <fcntl.h>
 #include <mutex>
+#include <pthread.h>
+#include <signal.h>
+#include <sys/signalfd.h>
 #include <thread>
+#include <unistd.h>
 
 static std::atomic<bool> running{true};
 static std::mutex shutdown_mutex;
 static std::condition_variable shutdown_cv;
 
-static void signal_handler(int) {
-    running.store(false);
-    shutdown_cv.notify_all();
+static int pipe_write_fd = -1;
+
+static void self_pipe_handler(int signo) {
+    if (pipe_write_fd < 0) return;
+    unsigned char b = static_cast<unsigned char>(signo);
+    (void)!write(pipe_write_fd, &b, 1);
 }
 
 static void sensor_thread(
@@ -129,8 +139,41 @@ static void discovery_thread(comm::UdpBroadcaster& udp, core::ConfigManager& con
 }
 
 int main() {
-    std::signal(SIGINT, signal_handler);
-    std::signal(SIGTERM, signal_handler);
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGINT);
+    sigaddset(&mask, SIGTERM);
+
+    int shutdown_fd = -1;
+    bool use_signalfd = false;
+
+    if (pthread_sigmask(SIG_BLOCK, &mask, nullptr) == 0) {
+        shutdown_fd = signalfd(-1, &mask, SFD_CLOEXEC);
+        if (shutdown_fd >= 0) {
+            use_signalfd = true;
+        } else {
+            (void)pthread_sigmask(SIG_UNBLOCK, &mask, nullptr);
+        }
+    }
+
+    if (!use_signalfd) {
+        int fds[2];
+        if (pipe2(fds, O_CLOEXEC | O_NONBLOCK) != 0) {
+            LOG_ERROR("Failed to set up shutdown pipe: " + std::string(std::strerror(errno)));
+            return 1;
+        }
+        shutdown_fd = fds[0];
+        pipe_write_fd = fds[1];
+
+        struct sigaction sa {};
+        sa.sa_handler = self_pipe_handler;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_flags = 0;
+        if (sigaction(SIGINT, &sa, nullptr) != 0 || sigaction(SIGTERM, &sa, nullptr) != 0) {
+            LOG_ERROR("Failed to install signal handler: " + std::string(std::strerror(errno)));
+            return 1;
+        }
+    }
 
     core::ConfigManager config("config.env");
     core::EventBus bus;
@@ -182,6 +225,35 @@ int main() {
 
     std::string als_http_endpoint = config.getString("als_http_endpoint", "http://api.factory-scada.local/sensor/als");
 
+    std::thread t_shutdown([&] {
+        if (use_signalfd) {
+            while (running.load()) {
+                signalfd_siginfo si {};
+                ssize_t n = read(shutdown_fd, &si, sizeof(si));
+                if (n == sizeof(si)) {
+                    running.store(false);
+                    shutdown_cv.notify_all();
+                    break;
+                }
+                if (n < 0 && errno == EINTR) continue;
+            }
+        } else {
+            while (running.load()) {
+                unsigned char b = 0;
+                ssize_t n = read(shutdown_fd, &b, 1);
+                if (n > 0) {
+                    running.store(false);
+                    shutdown_cv.notify_all();
+                    break;
+                }
+                if (n < 0 && (errno == EAGAIN || errno == EINTR)) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    continue;
+                }
+            }
+        }
+    });
+
     std::thread t_sensor(
         sensor_thread,
         std::ref(ble),
@@ -205,6 +277,10 @@ int main() {
     if (t_sensor.joinable()) t_sensor.join();
     if (t_audio.joinable()) t_audio.join();
     if (t_disc.joinable()) t_disc.join();
+    if (t_shutdown.joinable()) t_shutdown.join();
+
+    if (shutdown_fd >= 0) close(shutdown_fd);
+    if (pipe_write_fd >= 0) close(pipe_write_fd);
 
     udp.stop();
     web.stop();

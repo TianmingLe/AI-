@@ -1,5 +1,9 @@
 #include "EventBus.h"
 
+#include "LogManager.h"
+
+#include <exception>
+
 namespace core {
 
 void EventBus::subscribe(const std::string& topic, Handler handler) {
@@ -15,7 +19,13 @@ void EventBus::publish(const std::string& topic, const std::string& payload) {
         if (it != handlers_.end()) snapshot = it->second;
     }
     for (auto& h : snapshot) {
-        h(topic, payload);
+        try {
+            h(topic, payload);
+        } catch (const std::exception& e) {
+            LOG_ERROR("EventBus: handler exception topic=" + topic + " what=" + std::string(e.what()));
+        } catch (...) {
+            LOG_ERROR("EventBus: handler unknown exception topic=" + topic);
+        }
     }
 }
 
