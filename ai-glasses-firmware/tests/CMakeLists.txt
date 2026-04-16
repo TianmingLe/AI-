@@ -7,6 +7,7 @@ add_executable(run_tests
     test_udp.cpp
     test_gps.cpp
     test_sensor_fusion.cpp
+    test_event_bus.cpp
 )
 
 target_include_directories(run_tests PRIVATE /workspace/mocks/catch2)
