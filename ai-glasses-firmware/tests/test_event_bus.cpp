@@ -3,7 +3,9 @@
 #include "../src/core/EventBus.h"
 
 #include <atomic>
+#include <chrono>
 #include <stdexcept>
+#include <thread>
 
 TEST_CASE("EventBus isolates handler exceptions", "[eventbus]") {
     core::EventBus bus;
@@ -25,5 +27,10 @@ TEST_CASE("EventBus isolates handler exceptions", "[eventbus]") {
         threw = true;
     }
     REQUIRE(!threw);
+
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+    while (calls.load() < 2 && std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
     REQUIRE(calls.load() == 2);
 }
