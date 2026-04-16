@@ -4,7 +4,7 @@
 
 TEST_CASE("HttpClient mock post", "[http]") {
     comm::HttpClient client;
-    auto resp = client.post("http://example.invalid", "{\"a\":1}");
+    auto resp = client.post("http://127.0.0.1:1", "{\"a\":1}");
     if (client.isUsingMock()) {
         REQUIRE(resp.has_value());
     } else {

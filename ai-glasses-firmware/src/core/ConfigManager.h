@@ -15,9 +15,15 @@ public:
     std::string getString(const std::string& key, const std::string& default_value = "") const;
     std::optional<int> getInt(const std::string& key) const;
     std::optional<double> getFloat(const std::string& key) const;
+    bool isLoaded() const;
+    std::string lastError() const;
+    std::string path() const;
 
 private:
     std::unordered_map<std::string, std::string> kv_;
+    std::string path_;
+    std::string last_error_;
+    bool loaded_{false};
 };
 
 } // namespace core

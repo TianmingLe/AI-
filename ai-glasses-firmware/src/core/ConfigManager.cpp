@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cerrno>
+#include <cstring>
 #include <fstream>
 #include <sstream>
 
@@ -27,8 +29,14 @@ ConfigManager::ConfigManager(const std::string& path) {
 }
 
 bool ConfigManager::load(const std::string& path) {
+    path_ = path;
+    last_error_.clear();
+    loaded_ = false;
+    kv_.clear();
+
     std::ifstream in(path);
     if (!in.is_open()) {
+        last_error_ = std::string("open failed: ") + std::strerror(errno);
         return false;
     }
 
@@ -49,6 +57,7 @@ bool ConfigManager::load(const std::string& path) {
         kv_[key] = value;
     }
 
+    loaded_ = true;
     return true;
 }
 
@@ -76,6 +85,18 @@ std::optional<double> ConfigManager::getFloat(const std::string& key) const {
     } catch (...) {
         return std::nullopt;
     }
+}
+
+bool ConfigManager::isLoaded() const {
+    return loaded_;
+}
+
+std::string ConfigManager::lastError() const {
+    return last_error_;
+}
+
+std::string ConfigManager::path() const {
+    return path_;
 }
 
 } // namespace core

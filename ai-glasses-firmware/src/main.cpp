@@ -18,8 +18,10 @@
 #include "perception/SensorFusion.h"
 #include "render/ArRenderer.h"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cctype>
 #include <condition_variable>
 #include <csignal>
 #include <cstring>
@@ -176,6 +178,23 @@ int main() {
     }
 
     core::ConfigManager config("config.env");
+    if (!config.isLoaded()) {
+        LOG_WARN("Config load failed path=" + config.path() + " err=" + config.lastError());
+    }
+
+    std::string log_level = config.getString("log_level", "info");
+    std::transform(log_level.begin(), log_level.end(), log_level.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (log_level == "debug") {
+        core::LogManager::setLevel(core::LogLevel::Debug);
+    } else if (log_level == "info") {
+        core::LogManager::setLevel(core::LogLevel::Info);
+    } else if (log_level == "warn") {
+        core::LogManager::setLevel(core::LogLevel::Warn);
+    } else if (log_level == "error") {
+        core::LogManager::setLevel(core::LogLevel::Error);
+    } else {
+        LOG_WARN("Invalid log_level=" + log_level);
+    }
     core::EventBus bus;
 
     std::string mqtt_broker = config.getString("mqtt_broker", "tcp://localhost:1883");
